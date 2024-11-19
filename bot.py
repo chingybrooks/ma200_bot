@@ -4,7 +4,7 @@ import numpy as np
 from pycoingecko import CoinGeckoAPI
 from telebot import TeleBot
 from concurrent.futures import ThreadPoolExecutor
-from config import Config  # Импортируем Config
+from dotenv import load_dotenv
 
 # Инициализация клиента CoinGecko и Telegram
 cg = CoinGeckoAPI()
