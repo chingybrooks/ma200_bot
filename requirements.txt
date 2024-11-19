@@ -1,3 +1,4 @@
 pycoingecko
 pyTelegramBotAPI
 numpy
+python-dotenv
