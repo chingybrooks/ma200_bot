@@ -5,10 +5,21 @@ from pycoingecko import CoinGeckoAPI
 from telebot import TeleBot
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
+import os
+
+# Загрузка переменных окружения из .env
+load_dotenv()
 
 # Инициализация клиента CoinGecko и Telegram
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+CHAT_ID = os.getenv('CHAT_ID')
+
+# Проверка, что токен Telegram бота и чат ID корректно загружены
+if not TELEGRAM_TOKEN or not CHAT_ID:
+    raise ValueError("Необходимо указать TELEGRAM_TOKEN и CHAT_ID в .env файле")
+
+bot = TeleBot(TELEGRAM_TOKEN)
 cg = CoinGeckoAPI()
-bot = TeleBot(Config.TELEGRAM_TOKEN)
 
 # Логирование с ротацией логов
 log_handler = logging.handlers.RotatingFileHandler('crypto_bot.log', maxBytes=5*1024*1024, backupCount=3)
@@ -39,7 +50,7 @@ def get_moving_average(symbol_id, days='30', interval='4h', window=99):
 # Функция для логирования уведомлений
 def log_alert(message):
     logging.info(f"Отправлено уведомление: {message}")
-    bot.send_message(config.CHAT_ID, message)
+    bot.send_message(CHAT_ID, message)
 
 # Функция проверки касания MA
 def check_touch(symbol_id):
@@ -68,12 +79,12 @@ def set_alert_threshold(message):
         if 0 < threshold < 0.2:  # Ограничение от 0.1% до 20%
             TOUCH_PRECISION = threshold
             response = f"Порог приближения к MA установлен на {threshold * 100}%"
-            bot.send_message(config.CHAT_ID, response)
+            bot.send_message(CHAT_ID, response)
             logging.info(response)
         else:
-            bot.send_message(config.CHAT_ID, "Порог должен быть между 0.1% и 20%.")
+            bot.send_message(CHAT_ID, "Порог должен быть между 0.1% и 20%.")
     except ValueError:
-        bot.send_message(config.CHAT_ID, "Введите корректное число для порога (например, 0.05 для 5%).")
+        bot.send_message(CHAT_ID, "Введите корректное число для порога (например, 0.05 для 5%).")
 
 # Получение списка топ-200 монет (исключая stablecoins)
 def get_top_200_symbols():
@@ -96,8 +107,9 @@ def main():
             time.sleep(1800)  # Задержка на 30 минут перед повторной проверкой
         except Exception as e:
             logging.error(f"Неожиданная ошибка в основном цикле: {e}")
-            bot.send_message(config.CHAT_ID, f"Ошибка в работе бота: {e}")
+            bot.send_message(CHAT_ID, f"Ошибка в работе бота: {e}")
             time.sleep(60)
 
 if __name__ == '__main__':
     main()
+    bot.polling()
