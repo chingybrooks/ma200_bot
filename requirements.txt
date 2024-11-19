@@ -2,3 +2,4 @@ pycoingecko
 pyTelegramBotAPI
 numpy
 python-dotenv
+logging
