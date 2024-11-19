@@ -4,17 +4,11 @@ import numpy as np
 from pycoingecko import CoinGeckoAPI
 from telebot import TeleBot
 from concurrent.futures import ThreadPoolExecutor
-
-# Конфигурация
-class Config:
-    TELEGRAM_TOKEN = 'your_telegram_token'
-    CHAT_ID = 'your_chat_id'
-
-config = Config()
+from config import Config  # Импортируем Config
 
 # Инициализация клиента CoinGecko и Telegram
 cg = CoinGeckoAPI()
-bot = TeleBot(config.TELEGRAM_TOKEN)
+bot = TeleBot(Config.TELEGRAM_TOKEN)
 
 # Логирование с ротацией логов
 log_handler = logging.handlers.RotatingFileHandler('crypto_bot.log', maxBytes=5*1024*1024, backupCount=3)
