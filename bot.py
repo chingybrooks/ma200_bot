@@ -1,8 +1,7 @@
 import logging
 import time
 import numpy as np
-from binance.client import Client
-from binance.exceptions import BinanceAPIException
+from pycoingecko import CoinGeckoAPI
 from telebot import TeleBot
 from concurrent.futures import ThreadPoolExecutor
 
@@ -10,15 +9,11 @@ from concurrent.futures import ThreadPoolExecutor
 class Config:
     TELEGRAM_TOKEN = 'your_telegram_token'
     CHAT_ID = 'your_chat_id'
-    BINANCE_API_KEY = 'your_binance_api_key'
-    BINANCE_API_SECRET = 'your_binance_api_secret'
 
 config = Config()
 
-# Инициализация клиента Binance
-client = Client(config.BINANCE_API_KEY, config.BINANCE_API_SECRET)
-
-# Инициализация бота Telegram
+# Инициализация клиента CoinGecko и Telegram
+cg = CoinGeckoAPI()
 bot = TeleBot(config.TELEGRAM_TOKEN)
 
 # Логирование с ротацией логов
@@ -29,23 +24,23 @@ logger = logging.getLogger()
 logger.addHandler(log_handler)
 
 # Настройки
-INTERVAL = '4h'  # Начальный интервал
+INTERVAL = '4h'  # Используемый интервал
 TOUCH_PRECISION = 0.01  # Порог приближения к MA (по умолчанию 1%)
 
-# Получение MA с обработкой ошибок
-def get_moving_average(symbol, interval, window, retries=3):
-    attempt = 0
-    while attempt < retries:
-        try:
-            klines = client.get_klines(symbol=symbol, interval=interval, limit=window)
-            close_prices = [float(kline[4]) for kline in klines]
-            return np.mean(close_prices)
-        except BinanceAPIException as e:
-            logging.error(f"Ошибка при получении данных с Binance (попытка {attempt + 1}): {e}")
-            time.sleep(10)  # Задержка перед повторной попыткой
-            attempt += 1
-    logging.error(f"Не удалось получить данные для {symbol} после {retries} попыток.")
-    return None
+# Получение MA с CoinGecko
+def get_moving_average(symbol_id, days='30', interval='4h', window=99):
+    try:
+        # Получаем данные о ценах за последние дни с указанным интервалом
+        market_data = cg.get_coin_market_chart_by_id(id=symbol_id, vs_currency='usd', days=days, interval=interval)
+        close_prices = [price[1] for price in market_data['prices']]
+        
+        if len(close_prices) < window:
+            return None  # Недостаточно данных для расчета MA
+        
+        return np.mean(close_prices[-window:])
+    except Exception as e:
+        logging.error(f"Ошибка при получении данных с CoinGecko для {symbol_id}: {e}")
+        return None
 
 # Функция для логирования уведомлений
 def log_alert(message):
@@ -53,19 +48,21 @@ def log_alert(message):
     bot.send_message(config.CHAT_ID, message)
 
 # Функция проверки касания MA
-def check_touch(symbol):
-    ma_99 = get_moving_average(symbol, INTERVAL, 99)
-    ma_200 = get_moving_average(symbol, INTERVAL, 200)
+def check_touch(symbol_id):
+    ma_99 = get_moving_average(symbol_id, window=99)
+    ma_200 = get_moving_average(symbol_id, window=200)
+    
     if not ma_99 or not ma_200:
-        logging.error(f"Не удалось получить MA для {symbol}")
+        logging.error(f"Не удалось получить MA для {symbol_id}")
         return
 
-    current_price = float(client.get_symbol_ticker(symbol=symbol)['price'])
+    current_price = cg.get_price(ids=symbol_id, vs_currencies='usd')[symbol_id]['usd']
+    
     if abs((current_price - ma_99) / ma_99) <= TOUCH_PRECISION:
-        message = f"Цена {symbol} коснулась MA 99: {current_price} (MA 99 = {ma_99})"
+        message = f"Цена {symbol_id} коснулась MA 99: {current_price} (MA 99 = {ma_99})"
         log_alert(message)
     if abs((current_price - ma_200) / ma_200) <= TOUCH_PRECISION:
-        message = f"Цена {symbol} коснулась MA 200: {current_price} (MA 200 = {ma_200})"
+        message = f"Цена {symbol_id} коснулась MA 200: {current_price} (MA 200 = {ma_200})"
         log_alert(message)
 
 # Команда для настройки порога
@@ -86,10 +83,14 @@ def set_alert_threshold(message):
 
 # Получение списка топ-200 монет (исключая stablecoins)
 def get_top_200_symbols():
-    # Здесь вы можете использовать API Binance для получения списка монет
-    # Например, получим все символы торговых пар с Binance и исключим stablecoins
-    all_symbols = client.get_exchange_info()['symbols']
-    return [symbol['symbol'] for symbol in all_symbols if symbol['status'] == 'TRADING' and not symbol['symbol'].endswith('USDT')]
+    try:
+        # Получаем топ-200 монет с CoinGecko, исключая stablecoins
+        coins = cg.get_coins_markets(vs_currency='usd')
+        filtered_coins = [coin['id'] for coin in coins if not coin['id'].endswith('usd') and not 'usd' in coin['id']]
+        return filtered_coins[:200]  # Ограничиваем до топ-200
+    except Exception as e:
+        logging.error(f"Ошибка при получении списка монет с CoinGecko: {e}")
+        return []
 
 # Основной цикл с многопоточностью
 def main():
