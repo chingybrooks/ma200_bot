@@ -1,4 +1,5 @@
 import logging
+from logging.handlers import RotatingFileHandler
 import time
 import numpy as np
 from pycoingecko import CoinGeckoAPI
@@ -6,6 +7,7 @@ from telebot import TeleBot
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 import os
+
 
 # Загрузка переменных окружения из .env
 load_dotenv()
@@ -22,7 +24,7 @@ bot = TeleBot(TELEGRAM_TOKEN)
 cg = CoinGeckoAPI()
 
 # Логирование с ротацией логов
-log_handler = logging.handlers.RotatingFileHandler('crypto_bot.log', maxBytes=5*1024*1024, backupCount=3)
+log_handler = RotatingFileHandler('crypto_bot.log', maxBytes=5*1024*1024, backupCount=3)
 log_handler.setLevel(logging.INFO)
 log_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logger = logging.getLogger()
